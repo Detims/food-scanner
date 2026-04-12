@@ -26,9 +26,10 @@ with torch.no_grad():
     probs = logits.softmax(dim=1)
 predicted_label = probs.argmax().item()
 print(labels[predicted_label])
-ingredients = ["dough", "cheese", "tomato sauce", "rice", "seaweed", "avocado", "lettuce",
-               "bacon", "beef", "chicken", "pasta", "olive oil"]
-prompt = f"Given the food item {labels[predicted_label]}, list the ingredients that are likely to be in it from the list: {', '.join(ingredients)}. Suggest enhancements and substitutions for the ingredients to improve the dish."
+# ingredients = ["dough", "cheese", "tomato sauce", "rice", "seaweed", "avocado", "lettuce",
+#                "bacon", "beef", "chicken", "pasta", "olive oil"]
+#prompt = f"Given the food item {labels[predicted_label]}, list the ingredients that are likely to be in it from the list: {', '.join(ingredients)}. Suggest enhancements and substitutions for the ingredients to improve the dish."
+prompt = f"Given the food item {labels[predicted_label]}, list the ingredients that are likely to be in it and suggest enhancements and substitutions for the ingredients to improve the dish."
 client = OpenAI(api_key="your api key here")
 response = client.chat.completions.create(
     model="gpt-4",
