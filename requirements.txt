@@ -4,3 +4,6 @@ torch
 datasets
 evaluate
 timm
+openai
+google-genai
+python-dotenv

@@ -5,6 +5,10 @@ from PIL import Image
 import requests
 import torch
 from openai import OpenAI
+from google import genai
+from google.genai import types
+import os
+from dotenv import load_dotenv
 
 # processor = AutoImageProcessor.from_pretrained("nateraw/food")
 # model = AutoModelForImageClassification.from_pretrained("nateraw/food")
@@ -30,12 +34,27 @@ print(labels[predicted_label])
 #                "bacon", "beef", "chicken", "pasta", "olive oil"]
 #prompt = f"Given the food item {labels[predicted_label]}, list the ingredients that are likely to be in it from the list: {', '.join(ingredients)}. Suggest enhancements and substitutions for the ingredients to improve the dish."
 prompt = f"Given the food item {labels[predicted_label]}, list the ingredients that are likely to be in it and suggest enhancements and substitutions for the ingredients to improve the dish."
-client = OpenAI(api_key="your api key here")
-response = client.chat.completions.create(
-    model="gpt-4",
-    messages=[
-        {"role": "system", "content": "You are a helpful AI assistant that provides information and suggestions about food and recipes."},
-        {"role": "user", "content": prompt}
-    ]
+
+# ChatGPT Implementation
+# client = OpenAI(api_key="your api key here")
+# response = client.chat.completions.create(
+#     model="gpt-4",
+#     messages=[
+#         {"role": "system", "content": "You are a helpful AI assistant that provides information and suggestions about food and recipes."},
+#         {"role": "user", "content": prompt}
+#     ]
+# )
+# print(response.choices[0].message.content)
+
+# Gemini Implementation
+load_dotenv()
+API_KEY = os.getenv("GENAI_API_KEY")
+client = genai.Client(api_key=API_KEY)
+response = client.models.generate_content(
+    model='gemini-2.5-flash',
+    config=types.GenerateContentConfig(
+        system_instruction="You are a helpful AI assistant that provides information and suggestions about food and recipes.",
+    ),
+    contents=prompt
 )
-print(response.choices[0].message.content)
+print(response.text)
