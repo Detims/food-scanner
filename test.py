@@ -33,7 +33,7 @@ print(labels[predicted_label])
 # ingredients = ["dough", "cheese", "tomato sauce", "rice", "seaweed", "avocado", "lettuce",
 #                "bacon", "beef", "chicken", "pasta", "olive oil"]
 #prompt = f"Given the food item {labels[predicted_label]}, list the ingredients that are likely to be in it from the list: {', '.join(ingredients)}. Suggest enhancements and substitutions for the ingredients to improve the dish."
-prompt = f"Given the food item {labels[predicted_label]}, list the ingredients that are likely to be in it and construct a recipe to create the dish."
+prompt = f"Given the food item {labels[predicted_label]}, list the ingredients that are likely to be in it and suggest enhancements and substitutions for the ingredients to improve the dish."
 
 # ChatGPT Implementation
 # client = OpenAI(api_key="your api key here")
@@ -53,7 +53,7 @@ client = genai.Client(api_key=API_KEY)
 response = client.models.generate_content(
     model='gemini-2.5-flash',
     config=types.GenerateContentConfig(
-        system_instruction="You are a helpful AI assistant that provides recipe suggestions from food.",
+        system_instruction="You are a helpful AI assistant that provides information and suggestions about food and recipes.",
     ),
     contents=prompt
 )
