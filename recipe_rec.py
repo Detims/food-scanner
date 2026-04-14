@@ -9,10 +9,23 @@ from google import genai
 from google.genai import types
 import os
 from dotenv import load_dotenv
+import psycopg2
 
 load_dotenv()
 API_KEY = os.getenv("GENAI_API_KEY")
+DATABASE_URL = os.getenv("DATABASE_URL")
 client = genai.Client(api_key=API_KEY)
+db = psycopg2.connect(DATABASE_URL)
+
+""" TABLE SCHEMA:
+    dish_name: str
+    ingredients: jsonb Ex. (Json({"main": ["shrimp", "pasta"],"sauce": ["garlic", "olive oil", "red pepper flakes"],"extras": ["parsley", "lemon juice"]}))
+    calories: int
+    protein: int
+    carbs: int
+    fat: int
+    created_at: timestamptz
+"""
 
 # processor = AutoImageProcessor.from_pretrained("nateraw/food")
 # model = AutoModelForImageClassification.from_pretrained("nateraw/food")
@@ -27,9 +40,15 @@ client = genai.Client(api_key=API_KEY)
 #              f"0: {segments[0]["label"]}\t1: {segments[1]["label"]}\t2:{segments[2]["label"]}\n>")
 #     if selection in "012":
 #         break
+
+# Store all images in the images file
 image_extensions = ['.jpg', '.jpeg', '.png']
 image_files = [f for f in os.listdir('images') if os.path.splitext(f.lower())[1] in image_extensions]
 
+if not image_files:
+    raise Exception
+
+# Prepare images for prompt using the the Files API
 uploaded_files = []
 for filename in image_files:
     filepath = os.path.join('images', filename)
@@ -61,12 +80,15 @@ response = client.models.generate_content(
 #     contents=food
 # )
 
+# [Ingredient1,Ingredient2,...]
 ingredients = response.text.split(",")
 print(ingredients)
 
 print(f"Detected ingredients: {", ".join(ingredients)}")
 print("Please input more ingredients if needed. (n to end)")
 
+# TODO: Add removal function
+# User inputs more ingredients
 while True:
     ing = input(">")
     if ing.lower() == "n":
@@ -92,5 +114,13 @@ response = client.models.generate_content(
     ),
     contents=f"Food: {ingredients}\nIngredients: " + ", ".join(ingredients)
 )
+
+# TODO: Edit the prompt to additionally output something that follows the schema of the table
+# TODO: Parse the response, and insert into the table. A sample insert query is below.
+cur = db.cursor()
+cur.execute("INSERT INTO recipes (dish_name, calories) VALUES (%s, %s)",("Tacos", 600))
+db.commit()
+cur.close()
+db.close()
 
 print(response.text)
