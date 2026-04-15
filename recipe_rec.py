@@ -90,12 +90,31 @@ print("Please input more ingredients if needed. (n to end)")
 # TODO: Add removal function
 # User inputs more ingredients
 while True:
-    ing = input(">")
-    if ing.lower() == "n":
+    # ing = input(">")
+    # if ing.lower() == "n":
+    #     break
+    # if ing:
+    #     ing = ing.strip()
+    #     ingredients.append(ing)
+
+    # print("Ingredients: ")
+    # for cat, i in enumerate(ingredients):
+    #     print(f'{cat}: ')
+    #     for ing in i:
+    #         print(f'\t{ing}')
+    
+    print("Options:\n1. Add ingredient\n2. Remove ingredient\n3. Finish")
+    option = input(">").strip()
+    if option == "1":
+        new_ing = input("Enter ingredient to add: ").strip()
+        if new_ing:
+            ingredients.append(new_ing)
+    elif option == "2":
+        remove = input("Enter ingredient to remove: ").strip()
+        if remove in ingredients:
+            ingredients.remove(remove)
+    elif option == "3":
         break
-    if ing:
-        ing = ing.strip()
-        ingredients.append(ing)
     
 
 print(f"Resulting ingredients: {", ".join(ingredients)}")
