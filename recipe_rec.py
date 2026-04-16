@@ -140,6 +140,7 @@ def main():
         contents=f"Food: {ingredients}\nIngredients: " + ", ".join(ingredients)
     )
 
+    # Split response into actual response and JSON output
     result = response.text.splitlines()
     parse = result[-3:]
     result = result[:-3]
