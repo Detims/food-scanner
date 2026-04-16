@@ -40,106 +40,125 @@ db = psycopg2.connect(DATABASE_URL)
 #              f"0: {segments[0]["label"]}\t1: {segments[1]["label"]}\t2:{segments[2]["label"]}\n>")
 #     if selection in "012":
 #         break
+def main():
+    # Store all images in the images file
+    image_extensions = ['.jpg', '.jpeg', '.png']
+    image_files = [f for f in os.listdir('images') if os.path.splitext(f.lower())[1] in image_extensions]
 
-# Store all images in the images file
-image_extensions = ['.jpg', '.jpeg', '.png']
-image_files = [f for f in os.listdir('images') if os.path.splitext(f.lower())[1] in image_extensions]
+    if not image_files:
+        raise Exception
 
-if not image_files:
-    raise Exception
+    # Prepare images for prompt using the the Files API
+    uploaded_files = []
+    for filename in image_files:
+        filepath = os.path.join('images', filename)
+        uploaded_file = client.files.upload(file=filepath)
+        uploaded_files.append(uploaded_file)
 
-# Prepare images for prompt using the the Files API
-uploaded_files = []
-for filename in image_files:
-    filepath = os.path.join('images', filename)
-    uploaded_file = client.files.upload(file=filepath)
-    uploaded_files.append(uploaded_file)
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        config=types.GenerateContentConfig(
+            system_instruction=("You are a helpful AI assistant that identifies ingredients and food from images."
+                                "Only output the names of ingredients or food, separated by commas. Leave no spaces immediately after a comma."
+                                "The first letter of an element should be capitalized."
+                                "List the identified ingredients and food contained within the input."
+                                "If you cannot identify any food or ingredients, return 'N/A'"),
+        ),
+        contents=[uploaded_files]
+    )
 
-response = client.models.generate_content(
-    model='gemini-2.5-flash',
-    config=types.GenerateContentConfig(
-        system_instruction=("You are a helpful AI assistant that identifies ingredients and food from images."
-                            "Only output the names of ingredients or food, separated by commas. Leave no spaces immediately after a comma."
-                            "The first letter of an element should be capitalized."
-                            "List the identified ingredients and food contained within the input."),
-                            max_output_tokens=600
-    ),
-    contents=[uploaded_files]
-)
+    # food = segments[int(selection)]["label"]
+    # response = client.models.generate_content(
+    #     model="gemini-2.5-flash",
+    #     config=types.GenerateContentConfig(
+    #         system_instruction=("You are a helpful AI assistant that provides recipe suggestions from food."
+    #                             "Only output the names of ingredients, separated by commas. Leave no spaces immediately after a comma."
+    #                             "The first letter of an element should be capitalized."
+    #                             "List the most likely ingredients contained within the input text."),
+    #                             max_output_tokens=600
+    #     ),
+    #     contents=food
+    # )
 
-# food = segments[int(selection)]["label"]
-# response = client.models.generate_content(
-#     model="gemini-2.5-flash",
-#     config=types.GenerateContentConfig(
-#         system_instruction=("You are a helpful AI assistant that provides recipe suggestions from food."
-#                             "Only output the names of ingredients, separated by commas. Leave no spaces immediately after a comma."
-#                             "The first letter of an element should be capitalized."
-#                             "List the most likely ingredients contained within the input text."),
-#                             max_output_tokens=600
-#     ),
-#     contents=food
-# )
+    # [Ingredient1,Ingredient2,...]
+    ingredients = response.text.split(",")
+    # print(ingredients)
+    if 'N/A' in ingredients and len(ingredients) == 1:
+        print("No ingredients detected. Please try again with different images.")
+        return
 
-# [Ingredient1,Ingredient2,...]
-ingredients = response.text.split(",")
-print(ingredients)
+    print(f"Detected ingredients: {", ".join(ingredients)}")
+    print("Please input more ingredients if needed. (n to end)")
 
-print(f"Detected ingredients: {", ".join(ingredients)}")
-print("Please input more ingredients if needed. (n to end)")
+    # User inputs more ingredients
+    while True:
+        # ing = input(">")
+        # if ing.lower() == "n":
+        #     break
+        # if ing:
+        #     ing = ing.strip()
+        #     ingredients.append(ing)
 
-# TODO: Add removal function
-# User inputs more ingredients
-while True:
-    # ing = input(">")
-    # if ing.lower() == "n":
-    #     break
-    # if ing:
-    #     ing = ing.strip()
-    #     ingredients.append(ing)
+        # print("Ingredients: ")
+        # for cat, i in enumerate(ingredients):
+        #     print(f'{cat}: ')
+        #     for ing in i:
+        #         print(f'\t{ing}')
+        
+        print("Options:\n1. Add ingredient\n2. Remove ingredient\n3. Finish")
+        option = input(">").strip()
+        if option == "1":
+            new_ing = input("Enter ingredient to add: ").strip()
+            if new_ing:
+                ingredients.append(new_ing)
+        elif option == "2":
+            remove = input("Enter ingredient to remove: ").strip()
+            if remove in ingredients:
+                ingredients.remove(remove)
+        elif option == "3":
+            break
+        
 
-    # print("Ingredients: ")
-    # for cat, i in enumerate(ingredients):
-    #     print(f'{cat}: ')
-    #     for ing in i:
-    #         print(f'\t{ing}')
-    
-    print("Options:\n1. Add ingredient\n2. Remove ingredient\n3. Finish")
-    option = input(">").strip()
-    if option == "1":
-        new_ing = input("Enter ingredient to add: ").strip()
-        if new_ing:
-            ingredients.append(new_ing)
-    elif option == "2":
-        remove = input("Enter ingredient to remove: ").strip()
-        if remove in ingredients:
-            ingredients.remove(remove)
-    elif option == "3":
-        break
-    
+    print(f"Resulting ingredients: {", ".join(ingredients)}")
 
-print(f"Resulting ingredients: {", ".join(ingredients)}")
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        config=types.GenerateContentConfig(
+            system_instruction=("You are a helpful AI assistant that provides recipe suggestions from food."
+                                # "Suggest up to 5 improvements to the recipe to make the food and using the list of ingredients from the input string."
+                                # "Keep each recipe suggestion to at most 3 sentences."
+                                "Suggest 3 alternate recipe suggestions either similar to the given food item or using the same ingredients."
+                                "For each recipe, list the inferred nutritional values, separated by commas."
+                                "Each element in the list of nutritional values should follow the form: '<nutritional element>: <numerical value>'"
+                                "Nutritional values should be listed in this order: Calories, Protein, Carbs, Fat"
+                                "Provide a descriptive 1-sentence description for each alternate recipe followed by the list of ingredients."
+                                "Then state the by step-by-step instructions on how to make them."
+                                "Do not make up ingredients not included in the input string."
+                                "At the very end, list valid JSON for each recipe, including nutritional values, with no code block or extra explanations."
+                                "JSON schema: {'dish_name': '...', 'ingredients': '[...]', 'calories': '...', 'protein': '...', 'carbs': '...', 'fat': '...'}"),
+        ),
+        contents=f"Food: {ingredients}\nIngredients: " + ", ".join(ingredients)
+    )
 
-response = client.models.generate_content(
-    model="gemini-2.5-flash",
-    config=types.GenerateContentConfig(
-        system_instruction=("You are a helpful AI assistant that provides recipe suggestions from food."
-                            "List the inferred nutritional value given the food and its ingredients from the input string, separated by commas."
-                            "Each element in the list of nutritional values should follow the form: '<nutritional element>: <numerical value>'"
-                            "Suggest up to 5 improvements to the recipe to make the food and using the list of ingredients from the input string."
-                            "Keep each recipe suggestion to at most 3 sentences. Do not make up ingredients not included in the input string."
-                            "Additionally, suggest 1 alternate recipe suggestions either similar to the given food item or using the same ingredients."
-                            "Provide a descriptive 1-sentence description for the alternate recipe followed by the list of ingredients."
-                            "Also list nutritional values in the same format as the first recipe, followed by step-by-step instructions on how to make the alternate food item."),
-    ),
-    contents=f"Food: {ingredients}\nIngredients: " + ", ".join(ingredients)
-)
+    result = response.text.splitlines()
+    parse = result[-3:]
+    result = result[:-3]
+    for line in result:
+        print(line)
 
-# TODO: Edit the prompt to additionally output something that follows the schema of the table
-# TODO: Parse the response, and insert into the table. A sample insert query is below.
-cur = db.cursor()
-cur.execute("INSERT INTO recipes (dish_name, calories) VALUES (%s, %s)",("Tacos", 600))
-db.commit()
-cur.close()
-db.close()
+    print('========')
 
-print(response.text)
+    for line in parse:
+        print(line)
+
+    # TODO: Edit the prompt to additionally output something that follows the schema of the table
+    # TODO: Parse the response, and insert into the table. A sample insert query is below.
+    cur = db.cursor()
+    cur.execute("INSERT INTO recipes (dish_name, calories) VALUES (%s, %s)",("Tacos", 600))
+    db.commit()
+    cur.close()
+    db.close()
+
+
+if __name__ == "__main__":
+    main()
