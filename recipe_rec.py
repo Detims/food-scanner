@@ -10,6 +10,7 @@ from google.genai import types
 import os
 from dotenv import load_dotenv
 import psycopg2
+import json
 
 load_dotenv()
 API_KEY = os.getenv("GENAI_API_KEY")
@@ -87,7 +88,7 @@ def main():
         print("No ingredients detected. Please try again with different images.")
         return
 
-    print(f"Detected ingredients: {", ".join(ingredients)}")
+    print(f"Detected ingredients: {', '.join(ingredients)}")
     print("Please input more ingredients if needed. (n to end)")
 
     # User inputs more ingredients
@@ -119,7 +120,7 @@ def main():
             break
         
 
-    print(f"Resulting ingredients: {", ".join(ingredients)}")
+    print(f"Resulting ingredients: {', '.join(ingredients)}")
 
     response = client.models.generate_content(
         model="gemini-2.5-flash",
@@ -154,11 +155,58 @@ def main():
 
     # TODO: Edit the prompt to additionally output something that follows the schema of the table
     # TODO: Parse the response, and insert into the table. A sample insert query is below.
+    def _to_int(v):
+        """Gemini sometimes returns numbers as strings (e.g. '600' or '25g'). Cast safely."""
+        if v is None:
+            return 0
+        try:
+            return int(float(str(v).strip().split()[0].replace('g', '').replace('kcal', '')))
+        except (ValueError, IndexError):
+            return 0
+
     cur = db.cursor()
-    cur.execute("INSERT INTO recipes (dish_name, calories) VALUES (%s, %s)",("Tacos", 600))
+    inserted = 0
+    for line in parse:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            recipe = json.loads(line.replace("'", '"'))
+        except json.JSONDecodeError as e:
+            print(f"  Skipped unparseable JSON: {e}")
+            continue
+
+        # ingredients may arrive as a real list or as a stringified list — normalize to list
+        ings = recipe.get("ingredients", [])
+        if isinstance(ings, str):
+            try:
+                ings = json.loads(ings.replace("'", '"'))
+            except json.JSONDecodeError:
+                ings = [ings]
+
+        try:
+            cur.execute(
+                """INSERT INTO recipes (dish_name, ingredients, calories, protein, carbs, fat)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                (
+                    recipe.get("dish_name", "Unknown"),
+                    json.dumps(ings),
+                    _to_int(recipe.get("calories")),
+                    _to_int(recipe.get("protein")),
+                    _to_int(recipe.get("carbs")),
+                    _to_int(recipe.get("fat")),
+                ),
+            )
+            inserted += 1
+            print(f"  Inserted: {recipe.get('dish_name', 'Unknown')}")
+        except Exception as e:
+            db.rollback()
+            print(f"  Insert failed: {e}")
+
     db.commit()
     cur.close()
     db.close()
+    print(f"\nTotal inserted: {inserted}/3")
 
 
 if __name__ == "__main__":
