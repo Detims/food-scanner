@@ -12,6 +12,7 @@ from google.genai import types
 import os
 from dotenv import load_dotenv
 import psycopg2
+import json
 import ast
 
 
@@ -66,7 +67,6 @@ def print_daily_total(result):
 def main():
     db = psycopg2.connect(DATABASE_URL, sslmode='require')
     print_daily_total(daily_total(db))
-
     # Store all images in the images file
     image_extensions = ['.jpg', '.jpeg', '.png']
     image_files = [f for f in os.listdir('images') if os.path.splitext(f.lower())[1] in image_extensions]
@@ -113,7 +113,7 @@ def main():
         print("No ingredients detected. Please try again with different images.")
         return
 
-    print(f"Detected ingredients: {','.join(ingredients)}")
+    print(f"Detected ingredients: {', '.join(ingredients)}")
     print("Please input more ingredients if needed. (n to end)")
 
     # User inputs more ingredients
@@ -143,7 +143,6 @@ def main():
                 ingredients.remove(remove)
         elif option == "3":
             break
-        
 
     print(f"Resulting ingredients: {', '.join(ingredients)}")
 
@@ -163,7 +162,7 @@ def main():
                                 "At the very end, list valid JSON for each recipe, including nutritional values, with no code block or extra explanations."
                                 "JSON schema: {'dish_name': '...', 'ingredients': '[...]', 'calories': '...', 'protein': '...', 'carbs': '...', 'fat': '...'}"),
         ),
-        contents=f"Food: {ingredients}\nIngredients: " + ", ".join(ingredients)   
+        contents=f"Food: {ingredients}\nIngredients: " + ", ".join(ingredients)
     )
 
     parsed_recipes = []
