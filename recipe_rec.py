@@ -215,10 +215,11 @@ def main():
     VALUES (%s, %s, %s, %s, %s)
     """, (
         recipe["dish_name"],
-        int(str(recipe["calories"].replace("g", ""))),
-        int(str(recipe["protein"].replace("g", ""))),
-        int(str(recipe["carbs"].replace("g", ""))),
-        int(str(recipe["fat"].replace("g", "")))
+        int(str(recipe["calories"]).replace("g", "")),
+        int(str(recipe["protein"]).replace("g", "")),
+        int(str(recipe["carbs"]).replace("g", "")),
+        int(str(recipe["fat"]).replace("g", ""))
+     ))
      ))
 
     db.commit()
