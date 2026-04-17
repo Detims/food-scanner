@@ -1,11 +1,3 @@
-from random import choice
-
-from transformers import AutoImageProcessor, AutoModelForImageClassification
-from transformers import pipeline
-from transformers import CLIPProcessor,CLIPModel
-from PIL import Image
-import requests
-import torch
 from openai import OpenAI
 from google import genai
 from google.genai import types
@@ -13,8 +5,6 @@ import os
 from dotenv import load_dotenv
 import psycopg2
 import json
-import ast
-
 
 load_dotenv()
 API_KEY = os.getenv("GENAI_API_KEY")
@@ -30,25 +20,6 @@ client = genai.Client(api_key=API_KEY)
     fat: int
     created_at: timestamptz
 """
-
-#TODO: get the nutritional value so far during the day
-
-
-# processor = AutoImageProcessor.from_pretrained("nateraw/food")
-# model = AutoModelForImageClassification.from_pretrained("nateraw/food")
-# pipeline = pipeline("image-classification", model="nateraw/food")
-# segments = pipeline("https://images.unsplash.com/photo-1511688878353-3a2f5be94cd7") # Insert image here
-# print(f"First label: {segments[0]["label"]}")
-# print(f"Second label: {segments[1]["label"]}")
-# print(f"Third label: {segments[2]["label"]}")
-
-# while True:
-#     selection = input("Select from the food items below that best matches your image:\n"+
-#              f"0: {segments[0]["label"]}\t1: {segments[1]["label"]}\t2:{segments[2]["label"]}\n>")
-#     if selection in "012":
-#         break
-
-
 
 def daily_total(db):
     cur = db.cursor()
@@ -93,19 +64,6 @@ def main():
         contents=[uploaded_files]
     )
 
-    # food = segments[int(selection)]["label"]
-    # response = client.models.generate_content(
-    #     model="gemini-2.5-flash",
-    #     config=types.GenerateContentConfig(
-    #         system_instruction=("You are a helpful AI assistant that provides recipe suggestions from food."
-    #                             "Only output the names of ingredients, separated by commas. Leave no spaces immediately after a comma."
-    #                             "The first letter of an element should be capitalized."
-    #                             "List the most likely ingredients contained within the input text."),
-    #                             max_output_tokens=600
-    #     ),
-    #     contents=food
-    # )
-
     # [Ingredient1,Ingredient2,...]
     ingredients = response.text.split(",")
     # print(ingredients)
@@ -118,24 +76,11 @@ def main():
 
     # User inputs more ingredients
     while True:
-        # ing = input(">")
-        # if ing.lower() == "n":
-        #     break
-        # if ing:
-        #     ing = ing.strip()
-        #     ingredients.append(ing)
-
-        # print("Ingredients: ")
-        # for cat, i in enumerate(ingredients):
-        #     print(f'{cat}: ')
-        #     for ing in i:
-        #         print(f'\t{ing}')
-        
         print("Options:\n1. Add ingredient\n2. Remove ingredient\n3. Finish")
         option = input(">").strip()
         if option == "1":
             new_ing = input("Enter ingredient to add: ").strip()
-            if new_ing:
+            if new_ing and new_ing not in ingredients:
                 ingredients.append(new_ing)
         elif option == "2":
             remove = input("Enter ingredient to remove: ").strip()
@@ -160,32 +105,27 @@ def main():
                                 "Then state the by step-by-step instructions on how to make them."
                                 "Do not make up ingredients not included in the input string."
                                 "At the very end, list valid JSON for each recipe, including nutritional values, with no code block or extra explanations."
+                                "The values for each nutritional value should be soley numeric. Each JSON object should be single-line."
                                 "JSON schema: {'dish_name': '...', 'ingredients': '[...]', 'calories': '...', 'protein': '...', 'carbs': '...', 'fat': '...'}"),
         ),
         contents=f"Food: {ingredients}\nIngredients: " + ", ".join(ingredients)
     )
 
-    parsed_recipes = []
+    # Split response into actual response and JSON output
+    result = response.text.splitlines()
+    parsed_recipes = result[-3:]
+    result = result[:-3]
+    for line in result:
+        print(line)
 
+    for i, recipe in enumerate(parsed_recipes):
+        try:
+            parsed_recipes[i] = json.loads(recipe)
+        except: 
+            print("Error encountered when parsing recipe information.")
+            return
 
-    for line in response.text.splitlines():
-        line = line.strip()
-
-        if not line.startswith("{"):
-            print(line)
-
-        if line.startswith("{") and line.endswith("}"):
-            try:
-                recipe = ast.literal_eval(line)
-                parsed_recipes.append(recipe)
-            except:
-                print("Parse error:", line)
-
-    # TODO: Edit the prompt to additionally output something that follows the schema of the table
-    # TODO: Parse the response, and insert into the table. A sample insert query is below.
-
-#choose only one recipe to add to db
-
+    #choose only one recipe to add to db
     print("\n--- Recipe Choices ---\n")
     for i, recipe in enumerate(parsed_recipes, start=1):
             print(f"{i}. {recipe['dish_name']}")
@@ -206,25 +146,25 @@ def main():
 
     recipe = parsed_recipes[selection-1]
 
-
     cur = db.cursor()
 
-    
     cur.execute("""
-    INSERT INTO recipes (dish_name, calories, protein, carbs, fat)
-    VALUES (%s, %s, %s, %s, %s)
+    INSERT INTO recipes (dish_name, ingredients, calories, protein, carbs, fat)
+    VALUES (%s, %s, %s, %s, %s, %s)
     """, (
         recipe["dish_name"],
-        int(str(recipe["calories"]).replace("g", "")),
-        int(str(recipe["protein"]).replace("g", "")),
-        int(str(recipe["carbs"]).replace("g", "")),
-        int(str(recipe["fat"]).replace("g", ""))
+        json.dumps(recipe["ingredients"]),
+        recipe["calories"],
+        recipe["protein"],
+        recipe["carbs"],
+        recipe["fat"]
      ))
 
     db.commit()
     cur.close()
 
-    #print daily nutritional value for the recipes added that day
+    # #print daily nutritional value for the recipes added that day
+    print("Ending nutrion values: ")
     print_daily_total(daily_total(db))
 
 if __name__ == "__main__":
