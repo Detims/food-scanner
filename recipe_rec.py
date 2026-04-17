@@ -65,6 +65,7 @@ def print_daily_total(result):
 
 def main():
     db = psycopg2.connect(DATABASE_URL, sslmode='require')
+    print_daily_total(daily_total(db))
 
     # Store all images in the images file
     image_extensions = ['.jpg', '.jpeg', '.png']
@@ -219,7 +220,6 @@ def main():
         int(str(recipe["protein"]).replace("g", "")),
         int(str(recipe["carbs"]).replace("g", "")),
         int(str(recipe["fat"]).replace("g", ""))
-     ))
      ))
 
     db.commit()
