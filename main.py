@@ -8,8 +8,13 @@ import json
 
 load_dotenv()
 API_KEY = os.getenv("GENAI_API_KEY")
+# NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 client = genai.Client(api_key=API_KEY)
+# nvidia = OpenAI(
+#     base_url="https://integrate.api.nvidia.com/v1",
+#     api_key=NVIDIA_API_KEY,
+# )
 
 """ TABLE SCHEMA:
     dish_name: str
@@ -35,9 +40,50 @@ def print_daily_total(result):
     print(f"Carbs: {result[2]}g")
     print(f"Fat: {result[3]}g\n")
 
+def weekly_totals(db):
+    cur = db.cursor()
+    cur.execute("""
+    SELECT DATE(created_at),
+           COALESCE(SUM(calories), 0),
+           COALESCE(SUM(protein), 0),
+           COALESCE(SUM(carbs), 0),
+           COALESCE(SUM(fat), 0)
+    FROM recipes
+    WHERE DATE(created_at) >= CURRENT_DATE - INTERVAL '6 days'
+    GROUP BY DATE(created_at)
+    ORDER BY DATE(created_at)
+    """)
+    result = cur.fetchall()
+    cur.close()
+    return result
+
+def print_weekly_totals(results):
+    print("Daily nutritional values for the past week:\n")
+    if not results:
+        print("No nutrition information found for the past week.\n")
+        return
+
+    for result in results:
+        print(result[0])
+        print(f"Calories: {result[1]}")
+        print(f"Protein: {result[2]}g")
+        print(f"Carbs: {result[3]}g")
+        print(f"Fat: {result[4]}g\n")
+
 def main():
     db = psycopg2.connect(DATABASE_URL, sslmode='require')
     print_daily_total(daily_total(db))
+
+    while True:
+        print("Options:\n1. Display daily nutrition information for the past week\n2. Generate alternative recipes")
+        option = input("> ").strip()
+        if option == "1":
+            print_weekly_totals(weekly_totals(db))
+            return
+        elif option == "2":
+            break
+        print("Invalid input. Try again.")
+
     # Store all images in the images file
     image_extensions = ['.jpg', '.jpeg', '.png']
     image_files = [f for f in os.listdir('images') if os.path.splitext(f.lower())[1] in image_extensions]
@@ -111,8 +157,43 @@ def main():
         contents=f"Food: {ingredients}\nIngredients: " + ", ".join(ingredients)
     )
 
+    # system_prompt = """
+    #     You are a helpful AI assistant that provides recipe suggestions from food.
+
+    #     Suggest exactly 3 alternate recipe suggestions either similar to the given food item or using the same ingredients.
+
+    #     Do not make up ingredients not included in the input string.
+
+    #     For each recipe:
+    #     1. Provide the dish name.
+    #     2. Provide a descriptive 1-sentence description.
+    #     3. List the ingredients used.
+    #     4. List inferred nutritional values in this exact order:
+    #     Calories, Protein, Carbs, Fat.
+    #     5. Each nutritional value must follow this format:
+    #     "<nutritional element>: <numerical value>"
+    #     6. Provide step-by-step instructions.
+
+    #     At the very end, list valid JSON for each recipe, including nutritional values, with no code block or extra explanations.
+
+    #     The values for each nutritional value must be solely numeric.
+
+    #     Each JSON object must be single-line.
+
+    #     JSON schema:
+    #     {"dish_name":"...","ingredients":["..."],"calories":0,"protein":0,"carbs":0,"fat":0}
+    # """
+
+    # response = nvidia.chat.completions.create(
+    #     model="nvidia/nemotron-3-super-120b-a12b",
+    #     messages=[
+    #         {"role" : "system", "content": system_prompt},
+    #         {"role": "user", "content": f"Food: {ingredients}\nIngredients: " + ", ".join(ingredients)}]
+    # )
+
     # Split response into actual response and JSON output
     result = response.text.splitlines()
+    # result = response.choices[0].message.content.splitlines()
     parsed_recipes = result[-3:]
     result = result[:-3]
     for line in result:
