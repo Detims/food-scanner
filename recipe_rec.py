@@ -1,3 +1,4 @@
+import time
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 from transformers import pipeline
 from transformers import CLIPProcessor,CLIPModel
@@ -56,6 +57,9 @@ def main():
         uploaded_file = client.files.upload(file=filepath)
         uploaded_files.append(uploaded_file)
 
+    #Start stopwatch for Gemini API call
+    t_detect_start = time.perf_counter()
+
     response = client.models.generate_content(
         model='gemini-2.5-flash',
         config=types.GenerateContentConfig(
@@ -67,6 +71,10 @@ def main():
         ),
         contents=[uploaded_files]
     )
+
+    #End stopwatch for API call and save as seconds
+    t_detect_end = time.perf_counter()
+    detection_latency = t_detect_end - t_detect_start
 
     # food = segments[int(selection)]["label"]
     # response = client.models.generate_content(
@@ -122,6 +130,10 @@ def main():
 
     print(f"Resulting ingredients: {', '.join(ingredients)}")
 
+
+    #stopwatch for recipe generation
+    t_recipe_start = time.perf_counter()
+
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         config=types.GenerateContentConfig(
@@ -140,6 +152,10 @@ def main():
         ),
         contents=f"Food: {ingredients}\nIngredients: " + ", ".join(ingredients)
     )
+
+    #stopwatch for recipe generation
+    t_recipe_end = time.perf_counter()
+    recipe_latency = t_recipe_end - t_recipe_start
 
     # Split response into actual response and JSON output
     result = response.text.splitlines()
@@ -207,6 +223,10 @@ def main():
     cur.close()
     db.close()
     print(f"\nTotal inserted: {inserted}/3")
+
+    print(f"Time performance summary:\nIngredient detection latency: {detection_latency:.2f} seconds")
+    print(f"Recipe generation latency: {recipe_latency:.2f} seconds")
+    print(f"Total latency: {detection_latency + recipe_latency:.2f} seconds")
 
 
 if __name__ == "__main__":
