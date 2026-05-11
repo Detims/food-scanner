@@ -1,4 +1,3 @@
-from openai import OpenAI
 from google import genai
 from google.genai import types
 import os
@@ -8,13 +7,8 @@ import json
 
 load_dotenv()
 API_KEY = os.getenv("GENAI_API_KEY")
-# NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 client = genai.Client(api_key=API_KEY)
-# nvidia = OpenAI(
-#     base_url="https://integrate.api.nvidia.com/v1",
-#     api_key=NVIDIA_API_KEY,
-# )
 
 """ TABLE SCHEMA:
     dish_name: str
@@ -30,6 +24,17 @@ def daily_total(db):
     cur = db.cursor()
     cur.execute("SELECT COALESCE(SUM(calories), 0), COALESCE(SUM(protein), 0), COALESCE(SUM(carbs), 0), COALESCE(SUM(fat), 0) FROM recipes WHERE DATE(created_at) = CURRENT_DATE")
     result = cur.fetchone()
+    cur.close()
+    return result
+
+def meals_today(db):
+    cur = db.cursor()
+    cur.execute("""
+    SELECT COUNT(*)
+    FROM recipes
+    WHERE DATE(created_at) = CURRENT_DATE
+    """)
+    result = cur.fetchone()[0]
     cur.close()
     return result
 
@@ -69,6 +74,32 @@ def print_weekly_totals(results):
         print(f"Protein: {result[2]}g")
         print(f"Carbs: {result[3]}g")
         print(f"Fat: {result[4]}g\n")
+
+def get_nutrition_request(db):
+    while True:
+        print("Options:\n1. Adjust nutritional values\n2. Automatically adjust to the daily plan\n3. No additional changes")
+        option = input("> ").strip()
+        if option == "1":
+            request = input("Enter nutrition adjustment request: ").strip()
+            if request:
+                return request
+            print("Request cannot be empty. Try again.")
+        elif option == "2":
+            meals_logged = meals_today(db)
+            today_total = daily_total(db)
+            remaining_meals = max(1, 3 - meals_logged)
+
+            return (
+                f"Automatically adjust this recipe to fit the user's remaining daily nutrition plan. "
+                f"The user has already logged {meals_logged} meal(s) today. "
+                f"Assume the user plans to eat {remaining_meals} more meal(s) today, including this one. "
+                f"Use today's current totals as context: Calories={today_total[0]}, "
+                f"Protein={today_total[1]}g, Carbs={today_total[2]}g, Fat={today_total[3]}g. "
+                f"Recommend recipes with nutrition values appropriate for one of the remaining meals."
+            )
+        elif option == "3":
+            return "No additional changes."
+        print("Invalid input. Try again.")
 
 def main():
     db = psycopg2.connect(DATABASE_URL, sslmode='require')
@@ -136,6 +167,7 @@ def main():
             break
 
     print(f"Resulting ingredients: {', '.join(ingredients)}")
+    requests = get_nutrition_request(db)
 
     response = client.models.generate_content(
         model="gemini-2.5-flash",
@@ -149,51 +181,17 @@ def main():
                                 "Nutritional values should be listed in this order: Calories, Protein, Carbs, Fat"
                                 "Provide a descriptive 1-sentence description for each alternate recipe followed by the list of ingredients."
                                 "Then state the by step-by-step instructions on how to make them."
+                                "Adjust each recipe to satisfy the Requests field when possible, including requests to increase or reduce nutritional values."
                                 "Do not make up ingredients not included in the input string."
                                 "At the very end, list valid JSON for each recipe, including nutritional values, with no code block or extra explanations."
                                 "The values for each nutritional value should be soley numeric. Each JSON object should be single-line."
                                 "JSON schema: {'dish_name': '...', 'ingredients': '[...]', 'calories': '...', 'protein': '...', 'carbs': '...', 'fat': '...'}"),
         ),
-        contents=f"Food: {ingredients}\nIngredients: " + ", ".join(ingredients)
+        contents=f"Ingredients: {', '.join(ingredients)}\nRequests: {requests}"
     )
-
-    # system_prompt = """
-    #     You are a helpful AI assistant that provides recipe suggestions from food.
-
-    #     Suggest exactly 3 alternate recipe suggestions either similar to the given food item or using the same ingredients.
-
-    #     Do not make up ingredients not included in the input string.
-
-    #     For each recipe:
-    #     1. Provide the dish name.
-    #     2. Provide a descriptive 1-sentence description.
-    #     3. List the ingredients used.
-    #     4. List inferred nutritional values in this exact order:
-    #     Calories, Protein, Carbs, Fat.
-    #     5. Each nutritional value must follow this format:
-    #     "<nutritional element>: <numerical value>"
-    #     6. Provide step-by-step instructions.
-
-    #     At the very end, list valid JSON for each recipe, including nutritional values, with no code block or extra explanations.
-
-    #     The values for each nutritional value must be solely numeric.
-
-    #     Each JSON object must be single-line.
-
-    #     JSON schema:
-    #     {"dish_name":"...","ingredients":["..."],"calories":0,"protein":0,"carbs":0,"fat":0}
-    # """
-
-    # response = nvidia.chat.completions.create(
-    #     model="nvidia/nemotron-3-super-120b-a12b",
-    #     messages=[
-    #         {"role" : "system", "content": system_prompt},
-    #         {"role": "user", "content": f"Food: {ingredients}\nIngredients: " + ", ".join(ingredients)}]
-    # )
 
     # Split response into actual response and JSON output
     result = response.text.splitlines()
-    # result = response.choices[0].message.content.splitlines()
     parsed_recipes = result[-3:]
     result = result[:-3]
     for line in result:
